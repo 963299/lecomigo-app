@@ -477,7 +477,7 @@ document.getElementById('loadRangeBtn').addEventListener('click', async () => {
 async function translateToPortuguese(texto) {
   const prompt = 'Traduza o texto abaixo para português do Brasil, de forma natural e fluida, ' +
     'mantendo o sentido e o tom original. Devolva SOMENTE a tradução, sem comentários, sem aspas, sem markdown.\n\nTexto:\n' + texto;
-  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(DATA.geminiKey), {
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + encodeURIComponent(DATA.geminiKey), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -641,7 +641,7 @@ document.getElementById('genSummaryBtn').addEventListener('click', async () => {
     'Texto:\n' + texto;
 
   try {
-    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(DATA.geminiKey), {
+    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + encodeURIComponent(DATA.geminiKey), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -712,4 +712,4 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 </body>
-</html>
+</
