@@ -115,6 +115,11 @@
         <input type="text" id="pgTo" placeholder="até (ex: 5)" style="max-width:90px;">
         <button id="loadRangeBtn">Carregar</button>
       </div>
+      <div class="row" style="margin-top:10px;">
+        <input type="checkbox" id="translateCheck" style="flex:none; width:18px; height:18px;">
+        <label style="margin:0;" for="translateCheck">Traduzir para português antes de ler (a página pode estar em qualquer idioma — precisa da chave Gemini na aba Config)</label>
+      </div>
+      <p class="muted" id="translateStatus"></p>
     </div>
     <div class="card">
       <label>Idioma da voz</label>
@@ -430,17 +435,57 @@ document.getElementById('rateSlider').addEventListener('input', (e) => {
   document.getElementById('rateLabel').textContent = parseFloat(e.target.value).toFixed(1) + 'x';
 });
 
-document.getElementById('loadRangeBtn').addEventListener('click', () => {
+document.getElementById('loadRangeBtn').addEventListener('click', async () => {
   const book = getActiveBook();
   if (!book) { alert('Crie um livro primeiro.'); return; }
   const from = parseInt(document.getElementById('pgFrom').value) || 1;
   const to = parseInt(document.getElementById('pgTo').value) || book.paginas.length;
   const paginas = book.paginas.filter(p => p.ordem >= from && p.ordem <= to);
   if (!paginas.length) { alert('Nenhuma página nesse intervalo.'); return; }
-  const fullText = paginas.map(p => p.texto).join('\n\n');
+  let fullText = paginas.map(p => p.texto).join('\n\n');
+
+  const wantTranslate = document.getElementById('translateCheck').checked;
+  const statusEl = document.getElementById('translateStatus');
+  const loadBtn = document.getElementById('loadRangeBtn');
+
+  if (wantTranslate) {
+    if (!DATA.geminiKey) {
+      alert('Pra traduzir, cole sua chave Gemini na aba Config primeiro.');
+      return;
+    }
+    statusEl.textContent = 'Traduzindo para português...';
+    loadBtn.disabled = true;
+    try {
+      fullText = await translateToPortuguese(fullText);
+      statusEl.textContent = 'Traduzido. Selecione a voz em Português abaixo, se ainda não estiver.';
+      document.getElementById('voiceLangSelect').value = 'pt';
+      populateVoices();
+    } catch (err) {
+      statusEl.textContent = 'Erro ao traduzir: ' + err.message;
+      loadBtn.disabled = false;
+      return;
+    }
+    loadBtn.disabled = false;
+  } else {
+    statusEl.textContent = '';
+  }
+
   ttsSentences = splitSentences(fullText);
   renderListenText();
 });
+
+async function translateToPortuguese(texto) {
+  const prompt = 'Traduza o texto abaixo para português do Brasil, de forma natural e fluida, ' +
+    'mantendo o sentido e o tom original. Devolva SOMENTE a tradução, sem comentários, sem aspas, sem markdown.\n\nTexto:\n' + texto;
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(DATA.geminiKey), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  });
+  const json = await resp.json();
+  if (json.error) throw new Error(json.error.message || 'Erro na API Gemini');
+  return json.candidates[0].content.parts[0].text.trim();
+}
 
 function splitSentences(text) {
   return text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
