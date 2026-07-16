@@ -117,7 +117,10 @@
       </div>
     </div>
     <div class="card">
-      <label>Voz</label>
+      <label>Idioma da voz</label>
+      <select id="voiceLangSelect"></select>
+      <p class="muted" id="voiceLangHint" style="margin-top:4px;"></p>
+      <label style="margin-top:10px;">Voz</label>
       <select id="voiceSelect"></select>
       <div class="slider-row" style="margin-top:10px;">
         <label style="margin:0;">Velocidade</label>
@@ -162,6 +165,11 @@
   <!-- CONFIG -->
   <div class="panel" id="panel-config">
     <div class="card">
+      <label>Idioma deste livro</label>
+      <select id="bookLangSelect"></select>
+      <p class="muted" style="margin-top:8px;">Define o idioma usado para reconhecer o texto das fotos (OCR) e sugere a voz certa na aba Ouvir. Você ainda pode trocar a voz manualmente lá, sem mudar isso aqui.</p>
+    </div>
+    <div class="card">
       <label>Chave da API Gemini (fica salva só neste aparelho)</label>
       <input type="text" id="geminiKeyInput" placeholder="Cole sua chave aqui">
       <button id="saveKeyBtn" style="margin-top:8px;">Salvar chave</button>
@@ -181,6 +189,17 @@
 <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 const STORAGE_KEY = 'LIVROAPP_V1';
+
+// Idiomas suportados: código OCR (Tesseract) + prefixo de voz (BCP47) + rótulo em pt-BR
+const LANGS = [
+  { ocr: 'por', speech: 'pt', label: 'Português' },
+  { ocr: 'eng', speech: 'en', label: 'Inglês' },
+  { ocr: 'spa', speech: 'es', label: 'Espanhol' },
+  { ocr: 'fra', speech: 'fr', label: 'Francês' },
+  { ocr: 'ita', speech: 'it', label: 'Italiano' },
+  { ocr: 'deu', speech: 'de', label: 'Alemão' }
+];
+function langByOcr(code) { return LANGS.find(l => l.ocr === code) || LANGS[0]; }
 
 function loadData() {
   try {
@@ -228,7 +247,11 @@ document.getElementById('bookSelect').addEventListener('change', e => {
 document.getElementById('newBookBtn').addEventListener('click', () => {
   const titulo = prompt('Título do livro:');
   if (!titulo) return;
-  const book = { id: uid(), titulo, criadoEm: Date.now(), paginas: [], destaques: [] };
+  const opcoes = LANGS.map((l, i) => (i + 1) + ') ' + l.label).join('\n');
+  const escolha = prompt('Idioma do livro:\n' + opcoes + '\n\nDigite o número (padrão: 1 - Português)');
+  const idx = parseInt(escolha) - 1;
+  const idioma = (LANGS[idx] ? LANGS[idx] : LANGS[0]).ocr;
+  const book = { id: uid(), titulo, idioma, criadoEm: Date.now(), paginas: [], destaques: [] };
   DATA.books.push(book);
   DATA.activeBookId = book.id;
   saveData(DATA);
@@ -254,7 +277,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'paginas') renderPagesList();
     if (btn.dataset.tab === 'destaques') renderHighlights();
-    if (btn.dataset.tab === 'ouvir') populateVoices();
+    if (btn.dataset.tab === 'ouvir') { renderVoiceLangSelect(); populateVoices(); }
+    if (btn.dataset.tab === 'config') renderBookLangSelect();
   });
 });
 
@@ -262,16 +286,20 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 document.getElementById('fileInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  const book = getActiveBook();
+  if (!book) { alert('Crie um livro primeiro.'); return; }
   const statusEl = document.getElementById('ocrStatus');
   const progEl = document.getElementById('ocrProgress');
-  statusEl.textContent = 'Lendo imagem...';
+  const idiomaOcr = book.idioma || 'por';
+  const idiomaLabel = langByOcr(idiomaOcr).label;
+  statusEl.textContent = 'Lendo imagem em ' + idiomaLabel + '...';
   progEl.style.width = '0%';
   try {
-    const result = await Tesseract.recognize(file, 'por', {
+    const result = await Tesseract.recognize(file, idiomaOcr, {
       logger: m => {
         if (m.status === 'recognizing text') {
           progEl.style.width = Math.round(m.progress * 100) + '%';
-          statusEl.textContent = 'Reconhecendo texto... ' + Math.round(m.progress * 100) + '%';
+          statusEl.textContent = 'Reconhecendo texto (' + idiomaLabel + ')... ' + Math.round(m.progress * 100) + '%';
         } else {
           statusEl.textContent = m.status;
         }
@@ -354,14 +382,40 @@ let ttsSentences = [];
 let ttsIndex = 0;
 let ttsPlaying = false;
 
+function renderVoiceLangSelect() {
+  const sel = document.getElementById('voiceLangSelect');
+  const book = getActiveBook();
+  const defaultSpeech = langByOcr(book ? book.idioma : 'por').speech;
+  sel.innerHTML = '';
+  LANGS.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.speech;
+    opt.textContent = l.label;
+    sel.appendChild(opt);
+  });
+  sel.value = defaultSpeech;
+}
+
+document.getElementById('voiceLangSelect').addEventListener('change', () => {
+  populateVoices();
+});
+
 function populateVoices() {
   const sel = document.getElementById('voiceSelect');
+  const langSel = document.getElementById('voiceLangSelect');
+  const hint = document.getElementById('voiceLangHint');
   const fill = () => {
     const voices = speechSynthesis.getVoices();
+    const prefix = (langSel.value || 'pt').toLowerCase();
     sel.innerHTML = '';
-    let ptVoices = voices.filter(v => v.lang.toLowerCase().startsWith('pt'));
-    const list = ptVoices.length ? ptVoices : voices;
-    list.forEach((v, i) => {
+    let matched = voices.filter(v => v.lang.toLowerCase().startsWith(prefix));
+    const list = matched.length ? matched : voices;
+    if (!matched.length && voices.length) {
+      hint.textContent = 'Este aparelho não tem voz instalada nesse idioma — mostrando todas as vozes disponíveis.';
+    } else {
+      hint.textContent = '';
+    }
+    list.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v.name;
       opt.textContent = v.name + ' (' + v.lang + ')';
@@ -415,7 +469,7 @@ function speakFromIndex(i) {
   const chosen = voices.find(v => v.name === document.getElementById('voiceSelect').value);
   if (chosen) utter.voice = chosen;
   utter.rate = parseFloat(document.getElementById('rateSlider').value);
-  utter.lang = chosen ? chosen.lang : 'pt-BR';
+  utter.lang = chosen ? chosen.lang : (document.getElementById('voiceLangSelect').value || 'pt-BR');
   utter.onend = () => { if (ttsPlaying) speakFromIndex(i + 1); };
   speechSynthesis.speak(utter);
 }
@@ -501,6 +555,26 @@ document.getElementById('saveKeyBtn').addEventListener('click', () => {
   alert('Chave salva.');
 });
 
+function renderBookLangSelect() {
+  const sel = document.getElementById('bookLangSelect');
+  const book = getActiveBook();
+  sel.innerHTML = '';
+  LANGS.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.ocr;
+    opt.textContent = l.label;
+    sel.appendChild(opt);
+  });
+  sel.value = book ? (book.idioma || 'por') : 'por';
+  sel.disabled = !book;
+}
+document.getElementById('bookLangSelect').addEventListener('change', (e) => {
+  const book = getActiveBook();
+  if (!book) return;
+  book.idioma = e.target.value;
+  saveData(DATA);
+});
+
 document.getElementById('genSummaryBtn').addEventListener('click', async () => {
   const book = getActiveBook();
   if (!book) { alert('Crie um livro primeiro.'); return; }
@@ -513,10 +587,12 @@ document.getElementById('genSummaryBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('sumStatus');
   statusEl.textContent = 'Gerando resumo...';
 
-  const prompt = 'Leia o texto abaixo (trecho de um livro) e devolva SOMENTE um JSON válido, ' +
+  const idiomaLabel = langByOcr(book.idioma || 'por').label;
+  const prompt = 'Leia o texto abaixo (trecho de um livro em ' + idiomaLabel + ') e devolva SOMENTE um JSON válido, ' +
     'sem markdown, sem crases, sem comentário, no formato exato: ' +
     '{"tema_central": "string curta", "ramos": [{"topico": "string", "subtopicos": ["string", "string"]}]}. ' +
-    'Use entre 3 e 6 ramos principais, cada um com 2 a 4 subtópicos, resumindo as ideias centrais do texto em português. ' +
+    'Use entre 3 e 6 ramos principais, cada um com 2 a 4 subtópicos, resumindo as ideias centrais do texto em português, ' +
+    'mesmo que o texto original esteja em outro idioma. ' +
     'Texto:\n' + texto;
 
   try {
@@ -577,6 +653,8 @@ function renderAll() {
   renderBookSelect();
   renderPagesList();
   renderHighlights();
+  renderBookLangSelect();
+  renderVoiceLangSelect();
   document.getElementById('geminiKeyInput').value = DATA.geminiKey || '';
 }
 renderAll();
