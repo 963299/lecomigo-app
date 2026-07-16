@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Lê Comigo</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f2937">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0f1115; color:#e8e8e8; padding-bottom: 70px; }
+  header { background:#1f2937; padding:14px 16px; position:sticky; top:0; z-index:10; }
+  header h1 { margin:0; font-size:18px; }
+  .book-select { display:flex; gap:8px; margin-top:8px; }
+  select, input, textarea, button { font-family:inherit; font-size:15px; }
+  select, input[type=text] { flex:1; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px; }
+  button { background:#2563eb; color:#fff; border:none; border-radius:8px; padding:9px 14px; cursor:pointer; }
+  button.secondary { background:#374151; }
+  button.danger { background:#7f1d1d; }
+  button:disabled { opacity:0.5; }
+  main { padding:14px 16px; max-width:720px; margin:0 auto; }
+  .tabs { display:flex; overflow-x:auto; gap:6px; padding:10px 16px; background:#161a22; position:sticky; top:78px; z-index:9; }
+  .tab-btn { flex:none; background:#1f2937; color:#cbd5e1; border:1px solid #374151; border-radius:20px; padding:7px 14px; font-size:13px; }
+  .tab-btn.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .panel { display:none; }
+  .panel.active { display:block; }
+  .card { background:#161a22; border:1px solid #262c38; border-radius:12px; padding:14px; margin-bottom:14px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .muted { color:#94a3b8; font-size:13px; }
+  .page-text { white-space:pre-wrap; line-height:1.6; font-size:16px; user-select:text; }
+  .sentence { padding:1px 2px; border-radius:4px; }
+  .sentence.active { background:#3b82f6; color:#fff; }
+  .highlight-list li { background:#1e293b; border-radius:8px; padding:10px; margin-bottom:8px; list-style:none; }
+  .toolbar-floating { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); background:#111827; border:1px solid #374151; border-radius:24px; padding:6px; display:none; gap:6px; z-index:20; }
+  .toolbar-floating.show { display:flex; }
+  .slider-row { display:flex; align-items:center; gap:10px; }
+  input[type=range] { flex:1; }
+  .tree { margin-left:16px; }
+  .tree-node { margin:6px 0; }
+  .tree-title { cursor:pointer; background:#1e293b; padding:6px 10px; border-radius:8px; display:inline-block; }
+  .tree-title.central { background:#2563eb; font-weight:bold; font-size:16px; }
+  .progress { height:6px; background:#374151; border-radius:4px; overflow:hidden; margin-top:8px; }
+  .progress > div { height:100%; background:#2563eb; width:0%; }
+  .page-thumb { display:flex; justify-content:space-between; align-items:center; padding:8px; background:#1e293b; border-radius:8px; margin-bottom:6px; }
+  a.wa-link { color:#25D366; text-decoration:none; font-weight:bold; }
+  textarea { width:100%; background:#0b0d12; color:#e8e8e8; border:1px solid #374151; border-radius:8px; padding:10px; resize:vertical; }
+  label { font-size:13px; color:#94a3b8; display:block; margin-bottom:4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📖 Lê Comigo</h1>
+  <div class="book-select">
+    <select id="bookSelect"></select>
+    <button class="secondary" id="newBookBtn">+ Livro</button>
+  </div>
+</header>
+
+<div class="tabs" id="tabs">
+  <button class="tab-btn active" data-tab="importar">Importar</button>
+  <button class="tab-btn" data-tab="paginas">Páginas</button>
+  <button class="tab-btn" data-tab="ouvir">Ouvir</button>
+  <button class="tab-btn" data-tab="destaques">Destaques</button>
+  <button class="tab-btn" data-tab="resumo">Resumo/Mapa</button>
+  <button class="tab-btn" data-tab="config">Config</button>
+</div>
+
+<main>
+
+  <!-- IMPORTAR -->
+  <div class="panel active" id="panel-importar">
+    <div class="card">
+      <label>Foto ou print da página</label>
+      <input type="file" id="fileInput" accept="image/*" capture="environment">
+      <div class="progress"><div id="ocrProgress"></div></div>
+      <p class="muted" id="ocrStatus"></p>
+    </div>
+    <div class="card" id="reviewCard" style="display:none;">
+      <label>Texto reconhecido (revise antes de salvar)</label>
+      <textarea id="ocrText" rows="10"></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button id="savePageBtn">Salvar como nova página</button>
+        <button class="secondary" id="discardOcrBtn">Descartar</button>
+      </div>
+    </div>
+    <div class="card">
+      <label>Ou cole o texto direto (sem foto)</label>
+      <textarea id="pasteText" rows="6" placeholder="Cole aqui o texto da página..."></textarea>
+      <button id="savePastedBtn" style="margin-top:8px;">Salvar como nova página</button>
+    </div>
+  </div>
+
+  <!-- PAGINAS -->
+  <div class="panel" id="panel-paginas">
+    <div class="card">
+      <p class="muted">Páginas salvas neste livro. Toque em uma para ver o texto completo e destacar trechos.</p>
+      <div id="pagesList"></div>
+    </div>
+    <div class="card" id="pageViewCard" style="display:none;">
+      <div class="row" style="justify-content:space-between;">
+        <strong id="pageViewTitle"></strong>
+        <button class="danger" id="deletePageBtn">Excluir página</button>
+      </div>
+      <div class="page-text" id="pageViewText" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- OUVIR -->
+  <div class="panel" id="panel-ouvir">
+    <div class="card">
+      <label>Intervalo de páginas</label>
+      <div class="row">
+        <input type="text" id="pgFrom" placeholder="de (ex: 1)" style="max-width:90px;">
+        <input type="text" id="pgTo" placeholder="até (ex: 5)" style="max-width:90px;">
+        <button id="loadRangeBtn">Carregar</button>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <input type="checkbox" id="translateCheck" style="flex:none; width:18px; height:18px;">
+        <label style="margin:0;" for="translateCheck">Traduzir para português antes de ler (a página pode estar em qualquer idioma — precisa da chave Gemini na aba Config)</label>
+      </div>
+      <p class="muted" id="translateStatus"></p>
+    </div>
+    <div class="card">
+      <label>Idioma da voz</label>
+      <select id="voiceLangSelect"></select>
+      <p class="muted" id="voiceLangHint" style="margin-top:4px;"></p>
+      <label style="margin-top:10px;">Voz</label>
+      <select id="voiceSelect"></select>
+      <div class="slider-row" style="margin-top:10px;">
+        <label style="margin:0;">Velocidade</label>
+        <input type="range" id="rateSlider" min="0.5" max="2" step="0.1" value="1">
+        <span id="rateLabel">1.0x</span>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="playBtn">▶ Ler</button>
+        <button class="secondary" id="pauseBtn">⏸ Pausar</button>
+        <button class="secondary" id="stopBtn">⏹ Parar</button>
+        <button class="secondary" id="highlightBtn">✏ Destacar seleção</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="page-text" id="listenText"></div>
+    </div>
+  </div>
+
+  <!-- DESTAQUES -->
+  <div class="panel" id="panel-destaques">
+    <div class="card">
+      <ul class="highlight-list" id="highlightsList"></ul>
+    </div>
+  </div>
+
+  <!-- RESUMO -->
+  <div class="panel" id="panel-resumo">
+    <div class="card">
+      <label>Gerar resumo de qual intervalo?</label>
+      <div class="row">
+        <input type="text" id="sumFrom" placeholder="de (ex: 1)" style="max-width:90px;">
+        <input type="text" id="sumTo" placeholder="até (ex: 10)" style="max-width:90px;">
+        <button id="genSummaryBtn">Gerar resumo + mapa mental</button>
+      </div>
+      <p class="muted" id="sumStatus"></p>
+    </div>
+    <div class="card">
+      <div id="mindmapArea"></div>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="panel" id="panel-config">
+    <div class="card">
+      <label>Idioma deste livro</label>
+      <select id="bookLangSelect"></select>
+      <p class="muted" style="margin-top:8px;">Define o idioma usado para reconhecer o texto das fotos (OCR) e sugere a voz certa na aba Ouvir. Você ainda pode trocar a voz manualmente lá, sem mudar isso aqui.</p>
+    </div>
+    <div class="card">
+      <label>Chave da API Gemini (fica salva só neste aparelho)</label>
+      <input type="text" id="geminiKeyInput" placeholder="Cole sua chave aqui">
+      <button id="saveKeyBtn" style="margin-top:8px;">Salvar chave</button>
+      <p class="muted" style="margin-top:10px;">Consiga sua chave grátis em aistudio.google.com/apikey. Sem essa chave, o resumo/mapa mental não funciona (OCR e leitura por voz funcionam sem ela).</p>
+    </div>
+    <div class="card">
+      <button class="danger" id="deleteBookBtn">Excluir livro atual</button>
+    </div>
+  </div>
+
+</main>
+
+<div class="toolbar-floating" id="floatingHighlight">
+  <button id="floatingHighlightBtn">✏ Destacar</button>
+</div>
+
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+const STORAGE_KEY = 'LIVROAPP_V1';
+
+// Idiomas suportados: código OCR (Tesseract) + prefixo de voz (BCP47) + rótulo em pt-BR
+const LANGS = [
+  { ocr: 'por', speech: 'pt', label: 'Português' },
+  { ocr: 'eng', speech: 'en', label: 'Inglês' },
+  { ocr: 'spa', speech: 'es', label: 'Espanhol' },
+  { ocr: 'fra', speech: 'fr', label: 'Francês' },
+  { ocr: 'ita', speech: 'it', label: 'Italiano' },
+  { ocr: 'deu', speech: 'de', label: 'Alemão' }
+];
+function langByOcr(code) { return LANGS.find(l => l.ocr === code) || LANGS[0]; }
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { books: [], geminiKey: '', activeBookId: null };
+    return JSON.parse(raw);
+  } catch(e) { return { books: [], geminiKey: '', activeBookId: null }; }
+}
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+let DATA = loadData();
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function getActiveBook() {
+  return DATA.books.find(b => b.id === DATA.activeBookId) || null;
+}
+
+function renderBookSelect() {
+  const sel = document.getElementById('bookSelect');
+  sel.innerHTML = '';
+  if (DATA.books.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = 'Nenhum livro ainda';
+    sel.appendChild(opt);
+    return;
+  }
+  DATA.books.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.id;
+    opt.textContent = b.titulo;
+    sel.appendChild(opt);
+  });
+  if (!DATA.activeBookId && DATA.books.length) DATA.activeBookId = DATA.books[0].id;
+  sel.value = DATA.activeBookId;
+}
+
+document.getElementById('bookSelect').addEventListener('change', e => {
+  DATA.activeBookId = e.target.value;
+  saveData(DATA);
+  renderAll();
+});
+
+document.getElementById('newBookBtn').addEventListener('click', () => {
+  const titulo = prompt('Título do livro:');
+  if (!titulo) return;
+  const opcoes = LANGS.map((l, i) => (i + 1) + ') ' + l.label).join('\n');
+  const escolha = prompt('Idioma do livro:\n' + opcoes + '\n\nDigite o número (padrão: 1 - Português)');
+  const idx = parseInt(escolha) - 1;
+  const idioma = (LANGS[idx] ? LANGS[idx] : LANGS[0]).ocr;
+  const book = { id: uid(), titulo, idioma, criadoEm: Date.now(), paginas: [], destaques: [] };
+  DATA.books.push(book);
+  DATA.activeBookId = book.id;
+  saveData(DATA);
+  renderAll();
+});
+
+document.getElementById('deleteBookBtn').addEventListener('click', () => {
+  const book = getActiveBook();
+  if (!book) return;
+  if (!confirm('Excluir "' + book.titulo + '" e todas as páginas/destaques? Ação não pode ser desfeita.')) return;
+  DATA.books = DATA.books.filter(b => b.id !== book.id);
+  DATA.activeBookId = DATA.books.length ? DATA.books[0].id : null;
+  saveData(DATA);
+  renderAll();
+});
+
+// TABS
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'paginas') renderPagesList();
+    if (btn.dataset.tab === 'destaques') renderHighlights();
+    if (btn.dataset.tab === 'ouvir') { renderVoiceLangSelect(); populateVoices(); }
+    if (btn.dataset.tab === 'config') renderBookLangSelect();
+  });
+});
+
+// ---------- OCR ----------
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const book = getActiveBook();
+  if (!book) { alert('Crie um livro primeiro.'); return; }
+  const statusEl = document.getElementById('ocrStatus');
+  const progEl = document.getElementById('ocrProgress');
+  const idiomaOcr = book.idioma || 'por';
+  const idiomaLabel = langByOcr(idiomaOcr).label;
+  statusEl.textContent = 'Lendo imagem em ' + idiomaLabel + '...';
+  progEl.style.width = '0%';
+  try {
+    const result = await Tesseract.recognize(file, idiomaOcr, {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          progEl.style.width = Math.round(m.progress * 100) + '%';
+          statusEl.textContent = 'Reconhecendo texto (' + idiomaLabel + ')... ' + Math.round(m.progress * 100) + '%';
+        } else {
+          statusEl.textContent = m.status;
+        }
+      }
+    });
+    document.getElementById('ocrText').value = result.data.text.trim();
+    document.getElementById('reviewCard').style.display = 'block';
+    statusEl.textContent = 'Pronto. Revise o texto antes de salvar.';
+  } catch(err) {
+    statusEl.textContent = 'Erro ao ler imagem: ' + err.message;
+  }
+});
+
+document.getElementById('discardOcrBtn').addEventListener('click', () => {
+  document.getElementById('reviewCard').style.display = 'none';
+  document.getElementById('ocrText').value = '';
+  document.getElementById('fileInput').value = '';
+});
+
+document.getElementById('savePageBtn').addEventListener('click', () => {
+  const texto = document.getElementById('ocrText').value.trim();
+  if (!texto) { alert('Texto vazio.'); return; }
+  savePageToActiveBook(texto);
+  document.getElementById('reviewCard').style.display = 'none';
+  document.getElementById('ocrText').value = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('ocrStatus').textContent = 'Página salva!';
+});
+
+document.getElementById('savePastedBtn').addEventListener('click', () => {
+  const texto = document.getElementById('pasteText').value.trim();
+  if (!texto) { alert('Cole algum texto primeiro.'); return; }
+  savePageToActiveBook(texto);
+  document.getElementById('pasteText').value = '';
+  alert('Página salva!');
+});
+
+function savePageToActiveBook(texto) {
+  const book = getActiveBook();
+  if (!book) { alert('Crie um livro primeiro.'); return; }
+  const ordem = book.paginas.length + 1;
+  book.paginas.push({ id: uid(), ordem, texto, criadoEm: Date.now() });
+  saveData(DATA);
+}
+
+// ---------- PAGINAS ----------
+function renderPagesList() {
+  const book = getActiveBook();
+  const list = document.getElementById('pagesList');
+  list.innerHTML = '';
+  if (!book || book.paginas.length === 0) {
+    list.innerHTML = '<p class="muted">Nenhuma página salva ainda.</p>';
+    return;
+  }
+  book.paginas.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'page-thumb';
+    div.innerHTML = '<span>Página ' + p.ordem + ' — ' + p.texto.slice(0,40) + '...</span>';
+    div.addEventListener('click', () => viewPage(p));
+    list.appendChild(div);
+  });
+}
+
+function viewPage(page) {
+  document.getElementById('pageViewCard').style.display = 'block';
+  document.getElementById('pageViewTitle').textContent = 'Página ' + page.ordem;
+  document.getElementById('pageViewText').textContent = page.texto;
+  document.getElementById('deletePageBtn').onclick = () => {
+    if (!confirm('Excluir esta página?')) return;
+    const book = getActiveBook();
+    book.paginas = book.paginas.filter(p => p.id !== page.id);
+    saveData(DATA);
+    document.getElementById('pageViewCard').style.display = 'none';
+    renderPagesList();
+  };
+}
+
+// ---------- OUVIR (TTS) ----------
+let ttsSentences = [];
+let ttsIndex = 0;
+let ttsPlaying = false;
+
+function renderVoiceLangSelect() {
+  const sel = document.getElementById('voiceLangSelect');
+  const book = getActiveBook();
+  const defaultSpeech = langByOcr(book ? book.idioma : 'por').speech;
+  sel.innerHTML = '';
+  LANGS.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.speech;
+    opt.textContent = l.label;
+    sel.appendChild(opt);
+  });
+  sel.value = defaultSpeech;
+}
+
+document.getElementById('voiceLangSelect').addEventListener('change', () => {
+  populateVoices();
+});
+
+function populateVoices() {
+  const sel = document.getElementById('voiceSelect');
+  const langSel = document.getElementById('voiceLangSelect');
+  const hint = document.getElementById('voiceLangHint');
+  const fill = () => {
+    const voices = speechSynthesis.getVoices();
+    const prefix = (langSel.value || 'pt').toLowerCase();
+    sel.innerHTML = '';
+    let matched = voices.filter(v => v.lang.toLowerCase().startsWith(prefix));
+    const list = matched.length ? matched : voices;
+    if (!matched.length && voices.length) {
+      hint.textContent = 'Este aparelho não tem voz instalada nesse idioma — mostrando todas as vozes disponíveis.';
+    } else {
+      hint.textContent = '';
+    }
+    list.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + ' (' + v.lang + ')';
+      sel.appendChild(opt);
+    });
+  };
+  fill();
+  speechSynthesis.onvoiceschanged = fill;
+}
+
+document.getElementById('rateSlider').addEventListener('input', (e) => {
+  document.getElementById('rateLabel').textContent = parseFloat(e.target.value).toFixed(1) + 'x';
+});
+
+document.getElementById('loadRangeBtn').addEventListener('click', async () => {
+  const book = getActiveBook();
+  if (!book) { alert('Crie um livro primeiro.'); return; }
+  const from = parseInt(document.getElementById('pgFrom').value) || 1;
+  const to = parseInt(document.getElementById('pgTo').value) || book.paginas.length;
+  const paginas = book.paginas.filter(p => p.ordem >= from && p.ordem <= to);
+  if (!paginas.length) { alert('Nenhuma página nesse intervalo.'); return; }
+  let fullText = paginas.map(p => p.texto).join('\n\n');
+
+  const wantTranslate = document.getElementById('translateCheck').checked;
+  const statusEl = document.getElementById('translateStatus');
+  const loadBtn = document.getElementById('loadRangeBtn');
+
+  if (wantTranslate) {
+    if (!DATA.geminiKey) {
+      alert('Pra traduzir, cole sua chave Gemini na aba Config primeiro.');
+      return;
+    }
+    statusEl.textContent = 'Traduzindo para português...';
+    loadBtn.disabled = true;
+    try {
+      fullText = await translateToPortuguese(fullText);
+      statusEl.textContent = 'Traduzido. Selecione a voz em Português abaixo, se ainda não estiver.';
+      document.getElementById('voiceLangSelect').value = 'pt';
+      populateVoices();
+    } catch (err) {
+      statusEl.textContent = 'Erro ao traduzir: ' + err.message;
+      loadBtn.disabled = false;
+      return;
+    }
+    loadBtn.disabled = false;
+  } else {
+    statusEl.textContent = '';
+  }
+
+  ttsSentences = splitSentences(fullText);
+  renderListenText();
+});
+
+async function translateToPortuguese(texto) {
+  const prompt = 'Traduza o texto abaixo para português do Brasil, de forma natural e fluida, ' +
+    'mantendo o sentido e o tom original. Devolva SOMENTE a tradução, sem comentários, sem aspas, sem markdown.\n\nTexto:\n' + texto;
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + encodeURIComponent(DATA.geminiKey), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  });
+  const json = await resp.json();
+  if (json.error) throw new Error(json.error.message || 'Erro na API Gemini');
+  return json.candidates[0].content.parts[0].text.trim();
+}
+
+function splitSentences(text) {
+  return text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+}
+
+function renderListenText() {
+  const container = document.getElementById('listenText');
+  container.innerHTML = '';
+  ttsSentences.forEach((s, i) => {
+    const span = document.createElement('span');
+    span.className = 'sentence';
+    span.id = 'sent-' + i;
+    span.textContent = s + ' ';
+    container.appendChild(span);
+  });
+}
+
+function speakFromIndex(i) {
+  if (i >= ttsSentences.length) { ttsPlaying = false; return; }
+  ttsIndex = i;
+  document.querySelectorAll('.sentence').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('sent-' + i);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ behavior:'smooth', block:'center' }); }
+  const utter = new SpeechSynthesisUtterance(ttsSentences[i]);
+  const voices = speechSynthesis.getVoices();
+  const chosen = voices.find(v => v.name === document.getElementById('voiceSelect').value);
+  if (chosen) utter.voice = chosen;
+  utter.rate = parseFloat(document.getElementById('rateSlider').value);
+  utter.lang = chosen ? chosen.lang : (document.getElementById('voiceLangSelect').value || 'pt-BR');
+  utter.onend = () => { if (ttsPlaying) speakFromIndex(i + 1); };
+  speechSynthesis.speak(utter);
+}
+
+document.getElementById('playBtn').addEventListener('click', () => {
+  if (!ttsSentences.length) { alert('Carregue um intervalo de páginas primeiro.'); return; }
+  speechSynthesis.cancel();
+  ttsPlaying = true;
+  speakFromIndex(ttsIndex || 0);
+});
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  ttsPlaying = false;
+  speechSynthesis.cancel();
+});
+document.getElementById('stopBtn').addEventListener('click', () => {
+  ttsPlaying = false;
+  ttsIndex = 0;
+  speechSynthesis.cancel();
+  document.querySelectorAll('.sentence').forEach(s => s.classList.remove('active'));
+});
+
+// ---------- DESTAQUES ----------
+function getSelectedText() {
+  const sel = window.getSelection();
+  return sel ? sel.toString().trim() : '';
+}
+
+document.getElementById('highlightBtn').addEventListener('click', () => {
+  const texto = getSelectedText();
+  if (!texto) { alert('Selecione um trecho do texto primeiro (toque e arraste).'); return; }
+  saveHighlight(texto);
+});
+
+document.addEventListener('selectionchange', () => {
+  const texto = getSelectedText();
+  const toolbar = document.getElementById('floatingHighlight');
+  if (texto && texto.length > 3) toolbar.classList.add('show');
+  else toolbar.classList.remove('show');
+});
+document.getElementById('floatingHighlightBtn').addEventListener('click', () => {
+  const texto = getSelectedText();
+  if (!texto) return;
+  saveHighlight(texto);
+  document.getElementById('floatingHighlight').classList.remove('show');
+});
+
+function saveHighlight(texto) {
+  const book = getActiveBook();
+  if (!book) { alert('Crie um livro primeiro.'); return; }
+  book.destaques.push({ id: uid(), texto, criadoEm: Date.now() });
+  saveData(DATA);
+  alert('Destaque salvo!');
+}
+
+function renderHighlights() {
+  const book = getActiveBook();
+  const list = document.getElementById('highlightsList');
+  list.innerHTML = '';
+  if (!book || !book.destaques.length) {
+    list.innerHTML = '<p class="muted">Nenhum destaque ainda. Selecione um trecho nas abas Páginas ou Ouvir.</p>';
+    return;
+  }
+  book.destaques.slice().reverse().forEach(d => {
+    const li = document.createElement('li');
+    const waText = encodeURIComponent('"' + d.texto + '"\n— ' + book.titulo);
+    li.innerHTML = '<div>' + d.texto + '</div>' +
+      '<div class="row" style="margin-top:8px; justify-content:space-between;">' +
+      '<a class="wa-link" target="_blank" href="https://wa.me/?text=' + waText + '">Compartilhar no WhatsApp</a>' +
+      '<button class="danger" data-id="' + d.id + '">Excluir</button></div>';
+    li.querySelector('button').addEventListener('click', () => {
+      book.destaques = book.destaques.filter(x => x.id !== d.id);
+      saveData(DATA);
+      renderHighlights();
+    });
+    list.appendChild(li);
+  });
+}
+
+// ---------- RESUMO + MAPA MENTAL (Gemini) ----------
+document.getElementById('saveKeyBtn').addEventListener('click', () => {
+  DATA.geminiKey = document.getElementById('geminiKeyInput').value.trim();
+  saveData(DATA);
+  alert('Chave salva.');
+});
+
+function renderBookLangSelect() {
+  const sel = document.getElementById('bookLangSelect');
+  const book = getActiveBook();
+  sel.innerHTML = '';
+  LANGS.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.ocr;
+    opt.textContent = l.label;
+    sel.appendChild(opt);
+  });
+  sel.value = book ? (book.idioma || 'por') : 'por';
+  sel.disabled = !book;
+}
+document.getElementById('bookLangSelect').addEventListener('change', (e) => {
+  const book = getActiveBook();
+  if (!book) return;
+  book.idioma = e.target.value;
+  saveData(DATA);
+});
+
+document.getElementById('genSummaryBtn').addEventListener('click', async () => {
+  const book = getActiveBook();
+  if (!book) { alert('Crie um livro primeiro.'); return; }
+  if (!DATA.geminiKey) { alert('Cole sua chave Gemini na aba Config primeiro.'); return; }
+  const from = parseInt(document.getElementById('sumFrom').value) || 1;
+  const to = parseInt(document.getElementById('sumTo').value) || book.paginas.length;
+  const paginas = book.paginas.filter(p => p.ordem >= from && p.ordem <= to);
+  if (!paginas.length) { alert('Nenhuma página nesse intervalo.'); return; }
+  const texto = paginas.map(p => p.texto).join('\n\n');
+  const statusEl = document.getElementById('sumStatus');
+  statusEl.textContent = 'Gerando resumo...';
+
+  const idiomaLabel = langByOcr(book.idioma || 'por').label;
+  const prompt = 'Leia o texto abaixo (trecho de um livro em ' + idiomaLabel + ') e devolva SOMENTE um JSON válido, ' +
+    'sem markdown, sem crases, sem comentário, no formato exato: ' +
+    '{"tema_central": "string curta", "ramos": [{"topico": "string", "subtopicos": ["string", "string"]}]}. ' +
+    'Use entre 3 e 6 ramos principais, cada um com 2 a 4 subtópicos, resumindo as ideias centrais do texto em português, ' +
+    'mesmo que o texto original esteja em outro idioma. ' +
+    'Texto:\n' + texto;
+
+  try {
+    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + encodeURIComponent(DATA.geminiKey), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+    const json = await resp.json();
+    if (json.error) throw new Error(json.error.message || 'Erro na API Gemini');
+    let raw = json.candidates[0].content.parts[0].text.trim();
+    raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(raw);
+    renderMindmap(parsed);
+    statusEl.textContent = 'Mapa mental gerado.';
+  } catch (err) {
+    statusEl.textContent = 'Erro: ' + err.message + '. Verifique sua chave e o modelo (aistudio.google.com/apikey).';
+  }
+});
+
+function renderMindmap(data) {
+  const area = document.getElementById('mindmapArea');
+  area.innerHTML = '';
+  const central = document.createElement('div');
+  central.className = 'tree-title central';
+  central.textContent = '🧠 ' + data.tema_central;
+  area.appendChild(central);
+
+  const tree = document.createElement('div');
+  tree.className = 'tree';
+  (data.ramos || []).forEach(ramo => {
+    const node = document.createElement('div');
+    node.className = 'tree-node';
+    const title = document.createElement('div');
+    title.className = 'tree-title';
+    title.textContent = '▸ ' + ramo.topico;
+    const subList = document.createElement('div');
+    subList.className = 'tree';
+    subList.style.display = 'none';
+    (ramo.subtopicos || []).forEach(sub => {
+      const subDiv = document.createElement('div');
+      subDiv.className = 'tree-node muted';
+      subDiv.textContent = '• ' + sub;
+      subList.appendChild(subDiv);
+    });
+    title.addEventListener('click', () => {
+      subList.style.display = subList.style.display === 'none' ? 'block' : 'none';
+    });
+    node.appendChild(title);
+    node.appendChild(subList);
+    tree.appendChild(node);
+  });
+  area.appendChild(tree);
+}
+
+// ---------- INIT ----------
+function renderAll() {
+  renderBookSelect();
+  renderPagesList();
+  renderHighlights();
+  renderBookLangSelect();
+  renderVoiceLangSelect();
+  document.getElementById('geminiKeyInput').value = DATA.geminiKey || '';
+}
+renderAll();
+populateVoices();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW falhou:', err));
+  });
+}
+</script>
+</body>
+</html>
